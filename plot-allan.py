@@ -13,6 +13,7 @@ data = [(float(p.split()[0]), float(p.split()[1]), float(p.split()[2])) for p in
 fh.close()
 
 def get_values(data, column):
+    n_missing = 0
     values = []
     prev_value = None
     for row in data:
@@ -20,8 +21,11 @@ def get_values(data, column):
         if len(values) > 0:
             n_to_add = int(v) - int(prev_value) - 1
             values += [math.nan] * n_to_add
+            n_missing += n_to_add
         values.append(v)
         prev_value = v
+    if n_missing > 0:
+        print(f'{n_missing} samples were missing')
     return values
 
 v1 = get_values(data, 0)
