@@ -16,7 +16,7 @@
 #include "timespec-math.h"
 
 
-// apt istall pps-tools
+// apt install pps-tools
 
 
 struct result_t {
