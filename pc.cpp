@@ -1,6 +1,7 @@
 #include <atomic>
 #include <cerrno>
 #include <condition_variable>
+#include <csignal>
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
@@ -70,6 +71,13 @@ void get_pps(const char *const filename, result_t *const r)
 	}
 }
 
+std::atomic_bool stop { false };
+
+void sigh(int s)
+{
+	stop = true;
+}
+
 int main(int argc, char *argv[])
 {
 	result_t r1;
@@ -80,7 +88,13 @@ int main(int argc, char *argv[])
 	r2.valid = false;
 	std::thread th2(get_pps, argv[2], &r2);
 
-	for(;;) {
+	signal(SIGINT, sigh);
+
+	double total_difference = 0.;
+	double total_sd         = 0.;
+	int    n                = 0;
+
+	while(!stop) {
 		timespec ts1 { };
 
 		{
@@ -102,9 +116,22 @@ int main(int argc, char *argv[])
 			r2.valid = false;
 		}
 
+		if (stop)
+			break;
+
 		auto difference = timespec_subtract(ts1, ts2);
 		printf("%ld.%09ld %ld.%09ld %ld.%09ld\n", ts1.tv_sec, ts1.tv_nsec, ts2.tv_sec, ts2.tv_nsec, difference.tv_sec, difference.tv_nsec);
+
+		double d_difference = difference.tv_sec + difference.tv_nsec / 1000000000.;
+		total_difference   += d_difference;
+		total_sd           += d_difference * d_difference;
+		n++;
 	}
+
+	double avg = total_difference / n;
+	double sd  = sqrt(total_sd / n - avg * avg);
+
+	printf("count: %d, average: %.09f (%e), sd: %.09f (%e)\n", n, avg, avg, sd, sd);
 
 	return 0;
 }
