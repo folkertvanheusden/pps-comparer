@@ -1,15 +1,27 @@
+#include <atomic>
 #include <cerrno>
+#include <condition_variable>
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
 #include <fcntl.h>
+#include <mutex>
 #include <thread>
 #include <sys/timepps.h>
+
+#include "timespec-math.h"
 
 
 // apt istall pps-tools
 
+
+struct result_t {
+	timespec   ts;
+	bool       valid;
+	std::mutex lock;
+	std::condition_variable cv;
+};
 
 pps_handle_t open_pps(const char *const filename)
 {
@@ -37,7 +49,7 @@ pps_handle_t open_pps(const char *const filename)
 	return handle;
 }
 
-void get_pps(const char *const filename)
+void get_pps(const char *const filename, result_t *const r)
 {
 	pps_handle_t handle = open_pps(filename);
 
@@ -48,22 +60,51 @@ void get_pps(const char *const filename)
 			exit(1);
 		}
 
-		printf("Assert timestamp from %s: %d.%09d, sequence: %ld\n",
-				filename,
-				infobuf.assert_timestamp.tv_sec,
-				infobuf.assert_timestamp.tv_nsec,
-				infobuf.assert_sequence);
+		{
+			std::unique_lock<std::mutex> lck(r->lock);
+			r->ts.tv_sec  = infobuf.assert_timestamp.tv_sec;
+			r->ts.tv_nsec = infobuf.assert_timestamp.tv_nsec;
+			r->valid      = true;
+			r->cv.notify_one();
+		}
 	}
 }
 
 int main(int argc, char *argv[])
 {
-	std::thread th1(get_pps, argv[1]);
+	result_t r1;
+	r1.valid = false;
+	std::thread th1(get_pps, argv[1], &r1);
 
-	std::thread th2(get_pps, argv[2]);
+	result_t r2;
+	r2.valid = false;
+	std::thread th2(get_pps, argv[2], &r2);
 
-	for(;;)
-		sleep(1);
+	for(;;) {
+		timespec ts1 { };
+
+		{
+			std::unique_lock<std::mutex> lk1(r1.lock);
+			r1.cv.wait(lk1, [&]{ return r1.valid; });
+			ts1      = r1.ts;
+			r1.valid = false;
+		}
+
+		usleep(750000); // other pulse should be within 750 ms
+
+		timespec ts2 { };
+
+		{
+			std::unique_lock<std::mutex> lk2(r2.lock);
+			if (r2.valid == false) 
+				continue;
+			ts2      = r2.ts;
+			r2.valid = false;
+		}
+
+		auto difference = timespec_subtract(ts1, ts2);
+		printf("%ld.%09ld %ld.%09ld %ld.%09ld\n", ts1.tv_sec, ts1.tv_nsec, ts2.tv_sec, ts2.tv_nsec, difference.tv_sec, difference.tv_nsec);
+	}
 
 	return 0;
 }
