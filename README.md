@@ -7,7 +7,7 @@ Press ctrl+c to stop measuring and see the results.
 
 If you have saved the output to e.g. test.dat, you can plot the Allan deviation plot with:
 
-./plot.py test.dat test.svg
+./plot-allan.py test.dat test.svg
 
 test.svg is then the output-graph.
 
