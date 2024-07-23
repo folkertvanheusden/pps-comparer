@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <atomic>
 #include <cerrno>
 #include <condition_variable>
@@ -9,6 +10,7 @@
 #include <fcntl.h>
 #include <mutex>
 #include <thread>
+#include <vector>
 #include <sys/timepps.h>
 
 #include "timespec-math.h"
@@ -93,6 +95,7 @@ int main(int argc, char *argv[])
 	double total_difference = 0.;
 	double total_sd         = 0.;
 	int    n                = 0;
+	std::vector<double> median;
 
 	while(!stop) {
 		timespec ts1 { };
@@ -126,12 +129,19 @@ int main(int argc, char *argv[])
 		total_difference   += d_difference;
 		total_sd           += d_difference * d_difference;
 		n++;
+
+		median.push_back(d_difference);
 	}
 
 	double avg = total_difference / n;
 	double sd  = sqrt(total_sd / n - avg * avg);
 
-	printf("count: %d, average: %.09f (%e), sd: %.09f (%e)\n", n, avg, avg, sd, sd);
+	std::sort(median.begin(), median.end());
+	double med = median.at(n / 2);
+	if (n & 1)
+		med = (med + median.at(n / 2 + 1)) / 2.;
+
+	printf("count: %d, average: %.09f (%e), sd: %.09f (%e), median: %.09f (%e)\n", n, avg, avg, sd, sd, med, med);
 
 	return 0;
 }
