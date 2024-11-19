@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <getopt.h>
 #include <mutex>
+#include <sched.h>
 #include <thread>
 #include <vector>
 #include <sys/timepps.h>
@@ -28,6 +29,25 @@ struct result_t {
 };
 
 std::atomic_bool stop { false };
+
+void set_thread_affinity(const int nr)
+{
+	cpu_set_t cpuset;
+	CPU_ZERO(&cpuset);
+	CPU_SET(nr, &cpuset);
+
+	if (pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset))
+		fprintf(stderr, "Failed to set thread affinity!\n");
+}
+
+void set_thread_priority(const int nr)
+{
+    sched_param params { };
+    params.sched_priority = nr;
+
+    if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &params))
+	    fprintf(stderr, "Failed to set thread priority\n");
+}
 
 pps_handle_t open_pps(const char *const filename)
 {
@@ -55,9 +75,14 @@ pps_handle_t open_pps(const char *const filename)
 	return handle;
 }
 
-void get_pps(const char *const filename, result_t *const r)
+void get_pps(const char *const filename, result_t *const r, const int thread_nr)
 {
 	pps_handle_t handle = open_pps(filename);
+
+	// make sure they're not on the same cpu
+	set_thread_affinity(thread_nr);
+
+	set_thread_priority(99);
 
 	while(!stop) {
 		pps_info_t infobuf { };
@@ -74,6 +99,15 @@ void get_pps(const char *const filename, result_t *const r)
 			r->cv.notify_one();
 		}
 	}
+}
+
+void set_scheduling()
+{
+	sched_param params { };
+	params.sched_priority = 99;  // maximum priority
+
+	if (sched_setscheduler(0, SCHED_FIFO, &params))
+		fprintf(stderr, "Problem setting scheduling to real-time\n");
 }
 
 void sigh(int s)
@@ -115,11 +149,13 @@ int main(int argc, char *argv[])
 
 	result_t r1;
 	r1.valid = false;
-	std::thread th1(get_pps, dev_1, &r1);
+	std::thread th1(get_pps, dev_1, &r1, 1);
 
 	result_t r2;
 	r2.valid = false;
-	std::thread th2(get_pps, dev_2, &r2);
+	std::thread th2(get_pps, dev_2, &r2, 2);
+
+	set_thread_priority(98);  // high but below that of the two threads
 
 	signal(SIGINT, sigh);
 
