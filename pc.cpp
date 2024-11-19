@@ -26,6 +26,8 @@ struct result_t {
 	std::condition_variable cv;
 };
 
+std::atomic_bool stop { false };
+
 pps_handle_t open_pps(const char *const filename)
 {
 	int fd = open(filename, O_RDWR);
@@ -56,7 +58,7 @@ void get_pps(const char *const filename, result_t *const r)
 {
 	pps_handle_t handle = open_pps(filename);
 
-	for(;;) {
+	while(!stop) {
 		pps_info_t infobuf { };
 		if (time_pps_fetch(handle, PPS_TSFMT_TSPEC, &infobuf, nullptr) == -1) {
 			fprintf(stderr, "Cannot time_pps_fetch from %s: %s\n", filename, strerror(errno));
@@ -72,8 +74,6 @@ void get_pps(const char *const filename, result_t *const r)
 		}
 	}
 }
-
-std::atomic_bool stop { false };
 
 void sigh(int s)
 {
@@ -133,15 +133,20 @@ int main(int argc, char *argv[])
 		median.push_back(d_difference);
 	}
 
-	double avg = total_difference / n;
-	double sd  = sqrt(total_sd / n - avg * avg);
+	th2.join();
+	th1.join();
 
-	std::sort(median.begin(), median.end());
-	double med = median.at(n / 2);
-	if (n & 1)
-		med = (med + median.at(n / 2 + 1)) / 2.;
+	if (n) {
+		double avg = total_difference / n;
+		double sd  = sqrt(total_sd / n - avg * avg);
 
-	printf("count: %d, average: %.09f (%e), sd: %.09f (%e), median: %.09f (%e)\n", n, avg, avg, sd, sd, med, med);
+		std::sort(median.begin(), median.end());
+		double med = median.at(n / 2);
+		if ((n & 1) == 0)
+			med = (med + median.at(n / 2 + 1)) / 2.;
+
+		printf("count: %d, average: %.09f (%e), sd: %.09f (%e), median: %.09f (%e)\n", n, avg, avg, sd, sd, med, med);
+	}
 
 	return 0;
 }
