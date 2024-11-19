@@ -8,6 +8,7 @@
 #include <cstring>
 #include <ctime>
 #include <fcntl.h>
+#include <getopt.h>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -80,21 +81,51 @@ void sigh(int s)
 	stop = true;
 }
 
+void help()
+{
+	printf("pps-comparer, by Folkert van Heusden\n\n");
+	printf("-1 x   pps device 1\n");
+	printf("-2 x   pps device 2\n");
+	printf("-l x   logfile (optional)\n");
+	printf("-h     this help\n");
+}
+
 int main(int argc, char *argv[])
 {
+	const char *dev_1    = "/dev/pps0";
+	const char *dev_2    = "/dev/pps1";
+	const char *log_file = nullptr;
+	int         c        = -1;
+	while((c = getopt(argc, argv, "1:2:l:h")) != -1) {
+		if (c == '1')
+			dev_1 = optarg;
+		else if (c == '2')
+			dev_2 = optarg;
+		else if (c == 'l')
+			log_file = optarg;
+		else if (c == 'h') {
+			help();
+			return 0;
+		}
+		else {
+			help();
+			return 1;
+		}
+	}
+
 	result_t r1;
 	r1.valid = false;
-	std::thread th1(get_pps, argv[1], &r1);
+	std::thread th1(get_pps, dev_1, &r1);
 
 	result_t r2;
 	r2.valid = false;
-	std::thread th2(get_pps, argv[2], &r2);
+	std::thread th2(get_pps, dev_2, &r2);
 
 	signal(SIGINT, sigh);
 
-	double total_difference = 0.;
-	double total_sd         = 0.;
-	int    n                = 0;
+	long double total_difference = 0.;
+	long double total_sd         = 0.;
+	unsigned    n                = 0;
 	std::vector<double> median;
 
 	while(!stop) {
@@ -125,13 +156,13 @@ int main(int argc, char *argv[])
 		auto difference = timespec_subtract(ts1, ts2);
 		printf("%ld.%09ld %ld.%09ld %ld.%09ld\n", ts1.tv_sec, ts1.tv_nsec, ts2.tv_sec, ts2.tv_nsec, difference.tv_sec, difference.tv_nsec);
 		if (argc == 4) {
-			FILE *fh = fopen(argv[3], "a+");
+			FILE *fh = fopen(log_file, "a+");
 			if (fh) {
 				fprintf(fh, "%ld.%09ld %ld.%09ld %ld.%09ld\n", ts1.tv_sec, ts1.tv_nsec, ts2.tv_sec, ts2.tv_nsec, difference.tv_sec, difference.tv_nsec);
 				fclose(fh);
 			}
 			else {
-				fprintf(stderr, "\"%s\" is in accessible\n", argv[3]);
+				fprintf(stderr, "\"%s\" is in accessible\n", log_file);
 				break;
 			}
 		}
@@ -157,7 +188,7 @@ int main(int argc, char *argv[])
 			med = (med + median.at(n / 2 + 1)) / 2.;
 
 		printf("count: %d, average: %.09f (%e), sd: %.09f (%e), median: %.09f (%e)\n", n, avg, avg, sd, sd, med, med);
-		FILE *fh = fopen(argv[3], "a+");
+		FILE *fh = fopen(log_file, "a+");
 		if (fh) {
 			fprintf(fh, "count: %d, average: %.09f (%e), sd: %.09f (%e), median: %.09f (%e)\n", n, avg, avg, sd, sd, med, med);
 			fclose(fh);
