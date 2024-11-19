@@ -153,12 +153,14 @@ int main(int argc, char *argv[])
 		if (stop)
 			break;
 
-		auto difference = timespec_subtract(ts1, ts2);
-		printf("%ld.%09ld %ld.%09ld %ld.%09ld\n", ts1.tv_sec, ts1.tv_nsec, ts2.tv_sec, ts2.tv_nsec, difference.tv_sec, difference.tv_nsec);
-		if (argc == 4) {
+		auto  difference = timespec_subtract(ts1, ts2);
+		char *buffer     = nullptr;
+		asprintf(&buffer, "%ld.%09ld %ld.%09ld %ld.%09ld\n", ts1.tv_sec, ts1.tv_nsec, ts2.tv_sec, ts2.tv_nsec, difference.tv_sec, difference.tv_nsec);
+		printf("%s", buffer);
+		if (log_file) {
 			FILE *fh = fopen(log_file, "a+");
 			if (fh) {
-				fprintf(fh, "%ld.%09ld %ld.%09ld %ld.%09ld\n", ts1.tv_sec, ts1.tv_nsec, ts2.tv_sec, ts2.tv_nsec, difference.tv_sec, difference.tv_nsec);
+				fprintf(fh, "%s", buffer);
 				fclose(fh);
 			}
 			else {
@@ -166,6 +168,7 @@ int main(int argc, char *argv[])
 				break;
 			}
 		}
+		free(buffer);
 
 		double d_difference = difference.tv_sec + difference.tv_nsec / 1000000000.;
 		total_difference   += d_difference;
@@ -187,12 +190,17 @@ int main(int argc, char *argv[])
 		if ((n & 1) == 0)
 			med = (med + median.at(n / 2 + 1)) / 2.;
 
-		printf("count: %d, average: %.09f (%e), sd: %.09f (%e), median: %.09f (%e)\n", n, avg, avg, sd, sd, med, med);
-		FILE *fh = fopen(log_file, "a+");
-		if (fh) {
-			fprintf(fh, "count: %d, average: %.09f (%e), sd: %.09f (%e), median: %.09f (%e)\n", n, avg, avg, sd, sd, med, med);
-			fclose(fh);
+		char *buffer = nullptr;
+		asprintf(&buffer, "count: %d, average: %.09f (%e), sd: %.09f (%e), median: %.09f (%e)\n", n, avg, avg, sd, sd, med, med);
+		printf("%s", buffer);
+		if (log_file) {
+			FILE *fh = fopen(log_file, "a+");
+			if (fh) {
+				fprintf(fh, "%s", buffer);
+				fclose(fh);
+			}
 		}
+		free(buffer);
 	}
 
 	return 0;
