@@ -30,6 +30,13 @@ struct result_t {
 
 std::atomic_bool stop { false };
 
+int get_cpu_count()
+{
+	cpu_set_t cpuset { };
+	sched_getaffinity(0, sizeof(cpuset), &cpuset);
+	return CPU_COUNT(&cpuset);
+}
+
 void set_thread_affinity(const int nr)
 {
 	cpu_set_t cpuset;
@@ -80,7 +87,8 @@ void get_pps(const char *const filename, result_t *const r, const int thread_nr)
 	pps_handle_t handle = open_pps(filename);
 
 	// make sure they're not on the same cpu
-	set_thread_affinity(thread_nr);
+	if (get_cpu_count() >= 3)
+		set_thread_affinity(thread_nr);
 
 	set_thread_priority(99);
 
@@ -155,6 +163,9 @@ int main(int argc, char *argv[])
 	r2.valid = false;
 	std::thread th2(get_pps, dev_2, &r2, 2);
 
+	printf("Number of CPUs in system: %d\n", get_cpu_count());
+
+	set_thread_affinity(0);
 	set_thread_priority(98);  // high but below that of the two threads
 
 	signal(SIGINT, sigh);
