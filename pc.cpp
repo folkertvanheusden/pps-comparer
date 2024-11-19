@@ -124,6 +124,17 @@ int main(int argc, char *argv[])
 
 		auto difference = timespec_subtract(ts1, ts2);
 		printf("%ld.%09ld %ld.%09ld %ld.%09ld\n", ts1.tv_sec, ts1.tv_nsec, ts2.tv_sec, ts2.tv_nsec, difference.tv_sec, difference.tv_nsec);
+		if (argc == 4) {
+			FILE *fh = fopen(argv[3], "a+");
+			if (fh) {
+				fprintf(fh, "%ld.%09ld %ld.%09ld %ld.%09ld\n", ts1.tv_sec, ts1.tv_nsec, ts2.tv_sec, ts2.tv_nsec, difference.tv_sec, difference.tv_nsec);
+				fclose(fh);
+			}
+			else {
+				fprintf(stderr, "\"%s\" is in accessible\n", argv[3]);
+				break;
+			}
+		}
 
 		double d_difference = difference.tv_sec + difference.tv_nsec / 1000000000.;
 		total_difference   += d_difference;
@@ -146,6 +157,11 @@ int main(int argc, char *argv[])
 			med = (med + median.at(n / 2 + 1)) / 2.;
 
 		printf("count: %d, average: %.09f (%e), sd: %.09f (%e), median: %.09f (%e)\n", n, avg, avg, sd, sd, med, med);
+		FILE *fh = fopen(argv[3], "a+");
+		if (fh) {
+			fprintf(fh, "count: %d, average: %.09f (%e), sd: %.09f (%e), median: %.09f (%e)\n", n, avg, avg, sd, sd, med, med);
+			fclose(fh);
+		}
 	}
 
 	return 0;
