@@ -123,6 +123,23 @@ void set_scheduling()
 		fprintf(stderr, "Problem setting scheduling to real-time\n");
 }
 
+void emit(const char *const log_file, const char str[])
+{
+	printf("%s", str);
+
+	if (log_file) {
+		FILE *fh = fopen(log_file, "a+");
+		if (fh) {
+			fprintf(fh, "%s", str);
+			fclose(fh);
+		}
+		else {
+			fprintf(stderr, "\"%s\" is in accessible\n", log_file);
+			exit(1);
+		}
+	}
+}
+
 void sigh(int s)
 {
 	stop = true;
@@ -177,11 +194,16 @@ int main(int argc, char *argv[])
 
 	long double total_difference = 0.;
 	long double total_sd         = 0.;
+	long double total_diff_diff  = 0.;
+	double      previous_diff    = 0.;
 	unsigned    n                = 0;
 	unsigned    n_missing        = 0;
+	unsigned    n_missing_2      = 0;
 	std::vector<double> median;
 	time_t      prev_results     = 0;
 
+	const char header[] = "ts1 ts2 difference missing1/2 difference-drift\n";
+	emit(log_file, header);
 	while(!stop) {
 		timespec ts1 { };
 
@@ -197,8 +219,10 @@ int main(int argc, char *argv[])
 		{
 			std::unique_lock<std::mutex> lk2(r2.lock);
 			r2.cv.wait_for(lk2, std::chrono::milliseconds(950), [&]{ return r2.valid; });
-			if (r2.valid == false) 
+			if (r2.valid == false) {
+				n_missing_2++;
 				continue;
+			}
 			ts2      = r2.ts;
 			r2.valid = false;
 		}
@@ -212,24 +236,16 @@ int main(int argc, char *argv[])
 
 		double difference = diff_timespec(&ts1, &ts2);
 		char  *buffer     = nullptr;
-		asprintf(&buffer, "%ld.%09ld %ld.%09ld %.09f %u\n", ts1.tv_sec, ts1.tv_nsec, ts2.tv_sec, ts2.tv_nsec, difference, n_missing);
-		printf("%s", buffer);
-		if (log_file) {
-			FILE *fh = fopen(log_file, "a+");
-			if (fh) {
-				fprintf(fh, "%s", buffer);
-				fclose(fh);
-			}
-			else {
-				fprintf(stderr, "\"%s\" is in accessible\n", log_file);
-				break;
-			}
-		}
+		asprintf(&buffer, "%ld.%09ld %ld.%09ld %.09f %u/%u %.9Le\n", ts1.tv_sec, ts1.tv_nsec, ts2.tv_sec, ts2.tv_nsec, difference, n_missing, n_missing_2, n >= 1 ? total_diff_diff / n: -1.);
+		emit(log_file, buffer);
 		free(buffer);
 
 		total_difference   += difference;
 		total_sd           += difference * difference;
 		n++;
+		if (n >= 2)
+			total_diff_diff += difference - previous_diff;
+		previous_diff = difference;
 
 		median.push_back(difference);
 	}
@@ -248,14 +264,7 @@ int main(int argc, char *argv[])
 
 		char *buffer = nullptr;
 		asprintf(&buffer, "count: %d, average: %.09f (%e), sd: %.09f (%e), median: %.09f (%e), missing: %u\n", n, avg, avg, sd, sd, med, med, n_missing);
-		printf("%s", buffer);
-		if (log_file) {
-			FILE *fh = fopen(log_file, "a+");
-			if (fh) {
-				fprintf(fh, "%s", buffer);
-				fclose(fh);
-			}
-		}
+		emit(log_file, buffer);
 		free(buffer);
 	}
 
