@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
+#include <chrono>
 #include <cmath>
 #include <condition_variable>
 #include <csignal>
@@ -191,12 +192,11 @@ int main(int argc, char *argv[])
 			r1.valid = false;
 		}
 
-		usleep(950000); // other pulse should be within 950 ms
-
 		timespec ts2 { };
 
 		{
 			std::unique_lock<std::mutex> lk2(r2.lock);
+			r2.cv.wait_for(lk2, std::chrono::milliseconds(950), [&]{ return r2.valid; });
 			if (r2.valid == false) 
 				continue;
 			ts2      = r2.ts;
