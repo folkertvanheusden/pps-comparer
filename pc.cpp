@@ -1,3 +1,4 @@
+#include "config.h"
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
@@ -16,6 +17,9 @@
 #include <thread>
 #include <vector>
 #include <sys/timepps.h>
+#if HAVE_GPS
+#include <libgpsmm.h>
+#endif
 
 
 // apt install pps-tools
@@ -116,6 +120,32 @@ void get_pps(const char *const filename, result_t *const r, const int thread_nr)
 	}
 }
 
+#if HAVE_GPS
+void get_gps(const char *const host, std::atomic_int *const fix, std::atomic_uint64_t *const hdop)
+{
+	gpsmm gps_rec(host, DEFAULT_GPSD_PORT);
+
+	if (gps_rec.stream(WATCH_ENABLE | WATCH_JSON) == nullptr) {
+		fprintf(stderr, "gps not running?\n");
+		return;
+	}
+
+	while(!stop) {
+		if (!gps_rec.waiting(MILLION))
+			continue;
+
+		gps_data_t * gpsd_data = gps_rec.read();
+		if (!gpsd_data) {
+			fprintf(stderr, "Read fail from gpsd\n");
+			break;
+		}
+
+		*fix  = gpsd_data->fix.mode;
+		*hdop = gpsd_data->dop.hdop * MILLION;
+	}
+}
+#endif
+
 void set_scheduling()
 {
 	sched_param params { };
@@ -154,6 +184,9 @@ void help()
 	printf("-2 x   pps device 2\n");
 	printf("-l x   logfile (optional)\n");
 	printf("-s     \"scientific notation\"\n");
+#if HAVE_GPS
+	printf("-g x   connect to gpsd daemon on host 'x'\n");
+#endif
 	printf("-h     this help\n");
 }
 
@@ -164,7 +197,8 @@ int main(int argc, char *argv[])
 	const char *log_file = nullptr;
 	int         c        = -1;
 	bool        s_not    = false;
-	while((c = getopt(argc, argv, "1:2:l:sh")) != -1) {
+	const char *gps_host = nullptr;
+	while((c = getopt(argc, argv, "1:2:l:sg:h")) != -1) {
 		if (c == '1')
 			dev_1 = optarg;
 		else if (c == '2')
@@ -173,6 +207,8 @@ int main(int argc, char *argv[])
 			log_file = optarg;
 		else if (c == 's')
 			s_not = true;
+		else if (c == 'g')
+			gps_host = optarg;
 		else if (c == 'h') {
 			help();
 			return 0;
@@ -190,6 +226,12 @@ int main(int argc, char *argv[])
 	result_t r2;
 	r2.valid = false;
 	std::thread th2(get_pps, dev_2, &r2, 2);
+
+#if HAVE_GPS
+	std::atomic_int      fix  { 0 };
+	std::atomic_uint64_t hdop { 0 };
+	std::thread th_gps(get_gps, gps_host, &fix, &hdop);
+#endif
 
 	printf("Number of CPUs in system: %d\n", get_cpu_count());
 
@@ -209,7 +251,11 @@ int main(int argc, char *argv[])
 	unsigned    n_missing_2      = 0;
 	std::vector<double> median;
 
+#if HAVE_GPS
 	const char header[] = "ts1 ts2 difference missing1/2 difference-drift\n";
+#else
+	const char header[] = "ts1 ts2 difference missing1/2 difference-drift fix hdop\n";
+#endif
 	emit(log_file, header);
 	while(!stop) {
 		timespec ts1 { };
@@ -252,11 +298,18 @@ int main(int argc, char *argv[])
 			break;
 
 		double difference = diff_timespec(&ts1, &ts2);
+		char  *gps_buffer = nullptr;
+#if HAVE_GPS
+		asprintf(&gps_buffer, " %d %f", fix.load(), hdop / double(MILLION));
+#endif
 		char  *buffer     = nullptr;
-		const char *fmt   = s_not ? "%u %ld.%09ld %ld.%09ld %e %u/%u %Le\n" : "%u %ld.%09ld %ld.%09ld %.09f %u/%u %.9Lf\n";
-		asprintf(&buffer, fmt, n + 1, ts1.tv_sec, ts1.tv_nsec, ts2.tv_sec, ts2.tv_nsec, difference, n_missing_1, n_missing_2, n >= 1 ? total_diff_diff / n: -1.);
+		const char *fmt   = s_not ? "%u %ld.%09ld %ld.%09ld %e %u/%u %Le%s\n" : "%u %ld.%09ld %ld.%09ld %.09f %u/%u %.9Lf%s\n";
+		asprintf(&buffer, fmt, n + 1, ts1.tv_sec, ts1.tv_nsec, ts2.tv_sec, ts2.tv_nsec, difference, n_missing_1, n_missing_2, n >= 1 ? total_diff_diff / n: -1., gps_buffer ? gps_buffer : "");
 		emit(log_file, buffer);
 		free(buffer);
+#if HAVE_GPS
+		free(gps_buffer);
+#endif
 
 		total_difference   += difference;
 		total_sd           += difference * difference;
@@ -268,6 +321,9 @@ int main(int argc, char *argv[])
 		median.push_back(difference);
 	}
 
+#if HAVE_GPS
+	th_gps.join();
+#endif
 	th2.join();
 	th1.join();
 

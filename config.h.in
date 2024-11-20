@@ -1,0 +1,2 @@
+#cmakedefine01 GPS_FOUND
+#define HAVE_GPS GPS_FOUND

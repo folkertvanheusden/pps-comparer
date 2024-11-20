@@ -1,8 +1,10 @@
-To be able to compile this, you need the pps-tools and cmake packages.
+To be able to compile this, you need the pps-tools and cmake packages. libgps-dev is optional.
 To run:
     sudo ./pps-comparer -1 /dev/pps0 -2 /dev/pps1 -l log.dat
 
 Press ctrl+c to stop measuring
+
+When you've got libgps-dev installed during build, -g <host> adds gpsd stats to the output.
 
 If you have saved the output to e.g. test.dat (-l test.dat), you can plot the Allan deviation plot with:
 
