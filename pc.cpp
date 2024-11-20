@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
+#include <cmath>
 #include <condition_variable>
 #include <csignal>
 #include <cstdlib>
@@ -15,11 +16,14 @@
 #include <vector>
 #include <sys/timepps.h>
 
-#include "timespec-math.h"
-
 
 // apt install pps-tools
 
+
+double diff_timespec(const struct timespec *time1, const struct timespec *time0)
+{
+	return (time1->tv_sec - time0->tv_sec) + (time1->tv_nsec - time0->tv_nsec) / 1000000000.0;
+}
 
 struct result_t {
 	timespec   ts;
@@ -200,9 +204,9 @@ int main(int argc, char *argv[])
 		if (stop)
 			break;
 
-		auto  difference = timespec_subtract(ts1, ts2);
-		char *buffer     = nullptr;
-		asprintf(&buffer, "%ld.%09ld %ld.%09ld %ld.%09ld\n", ts1.tv_sec, ts1.tv_nsec, ts2.tv_sec, ts2.tv_nsec, difference.tv_sec, difference.tv_nsec);
+		double difference = diff_timespec(&ts1, &ts2);
+		char  *buffer     = nullptr;
+		asprintf(&buffer, "%ld.%09ld %ld.%09ld %.09f\n", ts1.tv_sec, ts1.tv_nsec, ts2.tv_sec, ts2.tv_nsec, difference);
 		printf("%s", buffer);
 		if (log_file) {
 			FILE *fh = fopen(log_file, "a+");
@@ -217,12 +221,11 @@ int main(int argc, char *argv[])
 		}
 		free(buffer);
 
-		double d_difference = difference.tv_sec + difference.tv_nsec / 1000000000.;
-		total_difference   += d_difference;
-		total_sd           += d_difference * d_difference;
+		total_difference   += difference;
+		total_sd           += difference * difference;
 		n++;
 
-		median.push_back(d_difference);
+		median.push_back(difference);
 	}
 
 	th2.join();
