@@ -177,7 +177,9 @@ int main(int argc, char *argv[])
 	long double total_difference = 0.;
 	long double total_sd         = 0.;
 	unsigned    n                = 0;
+	unsigned    n_missing        = 0;
 	std::vector<double> median;
+	time_t      prev_results     = 0;
 
 	while(!stop) {
 		timespec ts1 { };
@@ -189,7 +191,7 @@ int main(int argc, char *argv[])
 			r1.valid = false;
 		}
 
-		usleep(750000); // other pulse should be within 750 ms
+		usleep(950000); // other pulse should be within 950 ms
 
 		timespec ts2 { };
 
@@ -204,9 +206,13 @@ int main(int argc, char *argv[])
 		if (stop)
 			break;
 
+		bool   missing    = prev_results != 0 && ts1.tv_sec - prev_results >= 2;
+		prev_results      = ts1.tv_sec;
+		n_missing        += missing;
+
 		double difference = diff_timespec(&ts1, &ts2);
 		char  *buffer     = nullptr;
-		asprintf(&buffer, "%ld.%09ld %ld.%09ld %.09f\n", ts1.tv_sec, ts1.tv_nsec, ts2.tv_sec, ts2.tv_nsec, difference);
+		asprintf(&buffer, "%ld.%09ld %ld.%09ld %.09f %u\n", ts1.tv_sec, ts1.tv_nsec, ts2.tv_sec, ts2.tv_nsec, difference, n_missing);
 		printf("%s", buffer);
 		if (log_file) {
 			FILE *fh = fopen(log_file, "a+");
@@ -241,7 +247,7 @@ int main(int argc, char *argv[])
 			med = (med + median.at(n / 2 + 1)) / 2.;
 
 		char *buffer = nullptr;
-		asprintf(&buffer, "count: %d, average: %.09f (%e), sd: %.09f (%e), median: %.09f (%e)\n", n, avg, avg, sd, sd, med, med);
+		asprintf(&buffer, "count: %d, average: %.09f (%e), sd: %.09f (%e), median: %.09f (%e), missing: %u\n", n, avg, avg, sd, sd, med, med, n_missing);
 		printf("%s", buffer);
 		if (log_file) {
 			FILE *fh = fopen(log_file, "a+");
