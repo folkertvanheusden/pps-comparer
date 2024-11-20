@@ -197,10 +197,9 @@ int main(int argc, char *argv[])
 	long double total_diff_diff  = 0.;
 	double      previous_diff    = 0.;
 	unsigned    n                = 0;
-	unsigned    n_missing        = 0;
+	unsigned    n_missing_1      = 0;
 	unsigned    n_missing_2      = 0;
 	std::vector<double> median;
-	time_t      prev_results     = 0;
 
 	const char header[] = "ts1 ts2 difference missing1/2 difference-drift\n";
 	emit(log_file, header);
@@ -209,7 +208,11 @@ int main(int argc, char *argv[])
 
 		{
 			std::unique_lock<std::mutex> lk1(r1.lock);
-			r1.cv.wait(lk1, [&]{ return r1.valid; });
+			r1.cv.wait_for(lk1, std::chrono::milliseconds(1050), [&]{ return r1.valid; });
+			if (r2.valid == false) {
+				n_missing_1++;
+				continue;
+			}
 			ts1      = r1.ts;
 			r1.valid = false;
 		}
@@ -218,7 +221,7 @@ int main(int argc, char *argv[])
 
 		{
 			std::unique_lock<std::mutex> lk2(r2.lock);
-			r2.cv.wait_for(lk2, std::chrono::milliseconds(950), [&]{ return r2.valid; });
+			r2.cv.wait_for(lk2, std::chrono::milliseconds(900), [&]{ return r2.valid; });
 			if (r2.valid == false) {
 				n_missing_2++;
 				continue;
@@ -230,13 +233,9 @@ int main(int argc, char *argv[])
 		if (stop)
 			break;
 
-		bool   missing    = prev_results != 0 && ts1.tv_sec - prev_results >= 2;
-		prev_results      = ts1.tv_sec;
-		n_missing        += missing;
-
 		double difference = diff_timespec(&ts1, &ts2);
 		char  *buffer     = nullptr;
-		asprintf(&buffer, "%ld.%09ld %ld.%09ld %.09f %u/%u %.9Le\n", ts1.tv_sec, ts1.tv_nsec, ts2.tv_sec, ts2.tv_nsec, difference, n_missing, n_missing_2, n >= 1 ? total_diff_diff / n: -1.);
+		asprintf(&buffer, "%ld.%09ld %ld.%09ld %.09f %u/%u %.9Le\n", ts1.tv_sec, ts1.tv_nsec, ts2.tv_sec, ts2.tv_nsec, difference, n_missing_1, n_missing_2, n >= 1 ? total_diff_diff / n: -1.);
 		emit(log_file, buffer);
 		free(buffer);
 
@@ -263,7 +262,7 @@ int main(int argc, char *argv[])
 			med = (med + median.at(n / 2 + 1)) / 2.;
 
 		char *buffer = nullptr;
-		asprintf(&buffer, "count: %d, average: %.09f (%e), sd: %.09f (%e), median: %.09f (%e), missing: %u\n", n, avg, avg, sd, sd, med, med, n_missing);
+		asprintf(&buffer, "count: %d, average: %.09f (%e), sd: %.09f (%e), median: %.09f (%e), missing: %u/%u\n", n, avg, avg, sd, sd, med, med, n_missing_1, n_missing_2);
 		emit(log_file, buffer);
 		free(buffer);
 	}
