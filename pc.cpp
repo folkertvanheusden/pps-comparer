@@ -151,6 +151,7 @@ void help()
 	printf("-1 x   pps device 1\n");
 	printf("-2 x   pps device 2\n");
 	printf("-l x   logfile (optional)\n");
+	printf("-s     \"scientific notation\"\n");
 	printf("-h     this help\n");
 }
 
@@ -160,13 +161,16 @@ int main(int argc, char *argv[])
 	const char *dev_2    = "/dev/pps1";
 	const char *log_file = nullptr;
 	int         c        = -1;
-	while((c = getopt(argc, argv, "1:2:l:h")) != -1) {
+	bool        s_not    = false;
+	while((c = getopt(argc, argv, "1:2:l:sh")) != -1) {
 		if (c == '1')
 			dev_1 = optarg;
 		else if (c == '2')
 			dev_2 = optarg;
 		else if (c == 'l')
 			log_file = optarg;
+		else if (c == 's')
+			s_not = true;
 		else if (c == 'h') {
 			help();
 			return 0;
@@ -235,7 +239,8 @@ int main(int argc, char *argv[])
 
 		double difference = diff_timespec(&ts1, &ts2);
 		char  *buffer     = nullptr;
-		asprintf(&buffer, "%ld.%09ld %ld.%09ld %.09f %u/%u %.9Le\n", ts1.tv_sec, ts1.tv_nsec, ts2.tv_sec, ts2.tv_nsec, difference, n_missing_1, n_missing_2, n >= 1 ? total_diff_diff / n: -1.);
+		const char *fmt   = s_not ? "%u %ld.%09ld %ld.%09ld %e %u/%u %Le\n" : "%u %ld.%09ld %ld.%09ld %.09f %u/%u %.9Lf\n";
+		asprintf(&buffer, fmt, n + 1, ts1.tv_sec, ts1.tv_nsec, ts2.tv_sec, ts2.tv_nsec, difference, n_missing_1, n_missing_2, n >= 1 ? total_diff_diff / n: -1.);
 		emit(log_file, buffer);
 		free(buffer);
 

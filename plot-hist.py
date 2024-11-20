@@ -7,7 +7,7 @@ import sys
 
 
 fh = open(sys.argv[1], 'r')
-data = [p.split() for p in fh.readlines()[0:-1]]
+data = [p.split() for p in fh.readlines()[1:-1]]
 fh.close()
 
 mul = 5
@@ -16,7 +16,7 @@ plt.title('pps time difference')
 
 plt.ylabel('count')
 
-values = np.array([float(row[2]) for row in data])
+values = np.array([float(row[3]) for row in data])
 
 q25, q75 = np.percentile(values, [25, 75])
 bin_width = 2 * (q75 - q25) * len(values) ** (-1/3)
