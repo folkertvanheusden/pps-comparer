@@ -25,6 +25,7 @@ nr    ts1                  ts2                  difference   missing1/2 differen
 ...
 ```
 
+Two bad time-sources:
 ![allan deviation](images/AD.svg)
 
 
