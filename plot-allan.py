@@ -9,7 +9,7 @@ import sys
 
 
 fh = open(sys.argv[1], 'r')
-data = [(float(p.split()[1]), float(p.split()[2]), float(p.split()[3])) for p in fh.readlines()[1:-1]]
+data = [(float(p.split()[1]), float(p.split()[2])) for p in fh.readlines()[1:-1]]
 fh.close()
 
 def get_values(data, column):
