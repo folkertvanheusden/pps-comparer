@@ -20,10 +20,12 @@
 
 // apt install pps-tools
 
+#define MILLION (1000 * 1000)
+#define BILLION (MILLION * 1000)
 
 double diff_timespec(const struct timespec *time1, const struct timespec *time0)
 {
-	return (time1->tv_sec - time0->tv_sec) + (time1->tv_nsec - time0->tv_nsec) / 1000000000.0;
+	return (time1->tv_sec - time0->tv_sec) + (time1->tv_nsec - time0->tv_nsec) / double(BILLION);
 }
 
 struct result_t {
@@ -201,7 +203,9 @@ int main(int argc, char *argv[])
 	long double total_diff_diff  = 0.;
 	double      previous_diff    = 0.;
 	unsigned    n                = 0;
+	double      pt1              = 0;
 	unsigned    n_missing_1      = 0;
+	double      pt2              = 0;
 	unsigned    n_missing_2      = 0;
 	std::vector<double> median;
 
@@ -221,6 +225,11 @@ int main(int argc, char *argv[])
 			r1.valid = false;
 		}
 
+		uint64_t d_ts1 = ts1.tv_sec + ts1.tv_nsec / BILLION;
+		if (d_ts1 - pt1 >= 2 && pt1 > 0)
+			n_missing_1++;
+		pt1 = d_ts1;
+
 		timespec ts2 { };
 
 		{
@@ -233,6 +242,11 @@ int main(int argc, char *argv[])
 			ts2      = r2.ts;
 			r2.valid = false;
 		}
+
+		uint64_t d_ts2 = ts2.tv_sec + ts2.tv_nsec / BILLION;
+		if (d_ts2 - pt2 >= 2 && pt2 > 0)
+			n_missing_2++;
+		pt2 = d_ts2;
 
 		if (stop)
 			break;
