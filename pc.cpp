@@ -209,7 +209,7 @@ int main(int argc, char *argv[])
 		{
 			std::unique_lock<std::mutex> lk1(r1.lock);
 			r1.cv.wait_for(lk1, std::chrono::milliseconds(1050), [&]{ return r1.valid; });
-			if (r2.valid == false) {
+			if (r1.valid == false) {
 				n_missing_1++;
 				continue;
 			}
