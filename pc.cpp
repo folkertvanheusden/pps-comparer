@@ -155,21 +155,12 @@ void set_scheduling()
 		fprintf(stderr, "Problem setting scheduling to real-time\n");
 }
 
-void emit(const char *const log_file, const char str[])
+void emit(FILE *const fh, const char *const log_file, const char str[])
 {
 	printf("%s", str);
 
-	if (log_file) {
-		FILE *fh = fopen(log_file, "a+");
-		if (fh) {
-			fprintf(fh, "%s", str);
-			fclose(fh);
-		}
-		else {
-			fprintf(stderr, "\"%s\" is in accessible\n", log_file);
-			exit(1);
-		}
-	}
+	if (fh)
+		fprintf(fh, "%s", str);
 }
 
 void sigh(int s)
@@ -251,12 +242,21 @@ int main(int argc, char *argv[])
 	unsigned    n_missing_2      = 0;
 	std::vector<double> median;
 
+	FILE       *fh                = nullptr;
+	if (log_file) {
+		fh = fopen(log_file, "a+");
+		if (!fh) {
+			fprintf(stderr, "\"%s\" is in accessible\n", log_file);
+			exit(1);
+		}
+	}
+
 #if HAVE_GPS
 	const char header[] = "ts1 ts2 difference missing1/2 difference-drift\n";
 #else
 	const char header[] = "ts1 ts2 difference missing1/2 difference-drift fix hdop\n";
 #endif
-	emit(log_file, header);
+	emit(fh, log_file, header);
 	while(!stop) {
 		timespec ts1 { };
 
@@ -305,7 +305,7 @@ int main(int argc, char *argv[])
 		char  *buffer     = nullptr;
 		const char *fmt   = s_not ? "%u %ld.%09ld %ld.%09ld %e %u/%u %Le%s\n" : "%u %ld.%09ld %ld.%09ld %.09f %u/%u %.9Lf%s\n";
 		asprintf(&buffer, fmt, n + 1, ts1.tv_sec, ts1.tv_nsec, ts2.tv_sec, ts2.tv_nsec, difference, n_missing_1, n_missing_2, n >= 1 ? total_diff_diff / n: -1., gps_buffer ? gps_buffer : "");
-		emit(log_file, buffer);
+		emit(fh, log_file, buffer);
 		free(buffer);
 #if HAVE_GPS
 		free(gps_buffer);
@@ -338,9 +338,12 @@ int main(int argc, char *argv[])
 
 		char *buffer = nullptr;
 		asprintf(&buffer, "count: %d, average: %.09f (%e), sd: %.09f (%e), median: %.09f (%e), missing: %u/%u\n", n, avg, avg, sd, sd, med, med, n_missing_1, n_missing_2);
-		emit(log_file, buffer);
+		emit(fh, log_file, buffer);
 		free(buffer);
 	}
+
+	if (fh)
+		fclose(fh);
 
 	return 0;
 }
