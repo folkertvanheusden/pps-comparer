@@ -16,7 +16,7 @@ For a histogram or as a time-series, use plot-hist.py and plot-ts.py.
 
 Note: when pulses are missing(! e.g. when GPS loses fix), the comparison goes haywire.
 
-output:
+Output (with GPS - which is optional):
 ```
 nr    ts1                  ts2                  difference   missing1/2 difference-drift fix hdop
 10852 1732126554.000050923 1732126554.000046496 4.427000e-06 548/88     2.783154e-10     3   1.760000
