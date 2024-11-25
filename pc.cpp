@@ -252,9 +252,9 @@ int main(int argc, char *argv[])
 	std::vector<double> median;
 
 #if HAVE_GPS
-	const char header[] = "ts1 ts2 difference missing1/2 difference-drift\n";
-#else
 	const char header[] = "ts1 ts2 difference missing1/2 difference-drift fix hdop\n";
+#else
+	const char header[] = "ts1 ts2 difference missing1/2 difference-drift\n";
 #endif
 	emit(log_file, header);
 	while(!stop) {
