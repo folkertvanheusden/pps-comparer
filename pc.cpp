@@ -175,6 +175,7 @@ void help()
 	printf("-2 x   pps device 2\n");
 	printf("-n x   name1,name2 (comma seperated) for each device\n");
 	printf("-l x   logfile (optional)\n");
+	printf("-i x   emit header every x rows\n");
 	printf("-s     \"scientific notation\"\n");
 #if HAVE_GPS
 	printf("-g x   connect to gpsd daemon on host 'x'\n");
@@ -190,16 +191,19 @@ int main(int argc, char *argv[])
 	int         c        = -1;
 	bool        s_not    = false;
 	const char *gps_host = nullptr;
+	int         h_int    = 0;
 	std::string names;
 	std::string name1;
 	std::string name2;
-	while((c = getopt(argc, argv, "1:2:n:l:sg:h")) != -1) {
+	while((c = getopt(argc, argv, "1:2:n:i:l:sg:h")) != -1) {
 		if (c == '1')
 			dev_1 = optarg;
 		else if (c == '2')
 			dev_2 = optarg;
 		else if (c == 'n')
 			names = optarg;
+		else if (c == 'n')
+			h_int = atoi(optarg);
 		else if (c == 'l')
 			log_file = optarg;
 		else if (c == 's')
@@ -259,6 +263,7 @@ int main(int argc, char *argv[])
 	unsigned    n_missing_2      = 0;
 	bool        first            = true;
 	std::vector<double> median;
+	int         n_rows           = 0;
 
 	FILE       *fh               = nullptr;
 	if (log_file) {
@@ -350,6 +355,12 @@ int main(int argc, char *argv[])
 		previous_diff = difference;
 
 		median.push_back(difference);
+
+		n_rows++;
+		if (n_rows == h_int && h_int > 0) {
+			emit(fh, log_file, header.c_str());
+			n_rows = 0;
+		}
 	}
 
 #if HAVE_GPS
