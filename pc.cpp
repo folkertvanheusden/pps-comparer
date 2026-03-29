@@ -280,9 +280,9 @@ int main(int argc, char *argv[])
 	header += " ts2";
 	if (name2.empty() == false)
 		header += "(" + name2 + ")";
-	header += "difference interval1/2 missing1/2 difference-drift";
+	header += " difference interval1/2 missing1/2 difference-drift";
 #if HAVE_GPS
-	header += "fix hdop";
+	header += " fix hdop";
 #endif
 	header += "\n";
 	emit(fh, log_file, header.c_str());
