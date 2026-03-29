@@ -173,6 +173,7 @@ void help()
 	printf("pps-comparer, by Folkert van Heusden\n\n");
 	printf("-1 x   pps device 1\n");
 	printf("-2 x   pps device 2\n");
+	printf("-n x   name1,name2 (comma seperated) for each device\n");
 	printf("-l x   logfile (optional)\n");
 	printf("-s     \"scientific notation\"\n");
 #if HAVE_GPS
@@ -189,11 +190,16 @@ int main(int argc, char *argv[])
 	int         c        = -1;
 	bool        s_not    = false;
 	const char *gps_host = nullptr;
-	while((c = getopt(argc, argv, "1:2:l:sg:h")) != -1) {
+	std::string names;
+	std::string name1;
+	std::string name2;
+	while((c = getopt(argc, argv, "1:2:n:l:sg:h")) != -1) {
 		if (c == '1')
 			dev_1 = optarg;
 		else if (c == '2')
 			dev_2 = optarg;
+		else if (c == 'n')
+			names = optarg;
 		else if (c == 'l')
 			log_file = optarg;
 		else if (c == 's')
@@ -208,6 +214,15 @@ int main(int argc, char *argv[])
 			help();
 			return 1;
 		}
+	}
+
+	auto comma = names.find(',');
+	if (comma != std::string::npos) {
+		name1 = names.substr(0, comma);
+		name2 = names.substr(comma + 1);
+	}
+	else {
+		name1 = names;
 	}
 
 	result_t r1;
@@ -237,12 +252,15 @@ int main(int argc, char *argv[])
 	double      previous_diff    = 0.;
 	unsigned    n                = 0;
 	double      pt1              = 0;
+	unsigned    n_interval_1     = 0;
 	unsigned    n_missing_1      = 0;
 	double      pt2              = 0;
+	unsigned    n_interval_2     = 0;
 	unsigned    n_missing_2      = 0;
+	bool        first            = true;
 	std::vector<double> median;
 
-	FILE       *fh                = nullptr;
+	FILE       *fh               = nullptr;
 	if (log_file) {
 		fh = fopen(log_file, "a+");
 		if (!fh) {
@@ -251,12 +269,18 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	std::string header = "ts1";
+	if (name1.empty() == false)
+		header += "(" + name1 + ")";
+	header += " ts2";
+	if (name2.empty() == false)
+		header += "(" + name2 + ")";
+	header += "difference interval1/2 missing1/2 difference-drift";
 #if HAVE_GPS
-	const char header[] = "ts1 ts2 difference missing1/2 difference-drift fix hdop\n";
-#else
-	const char header[] = "ts1 ts2 difference missing1/2 difference-drift\n";
+	header += "fix hdop";
 #endif
-	emit(fh, log_file, header);
+	header += "\n";
+	emit(fh, log_file, header.c_str());
 	while(!stop) {
 		timespec ts1 { };
 
@@ -271,9 +295,10 @@ int main(int argc, char *argv[])
 			r1.valid = false;
 		}
 
-		uint64_t d_ts1 = ts1.tv_sec + ts1.tv_nsec / BILLION;
-		if (d_ts1 - pt1 >= 2 && pt1 > 0)
-			n_missing_1++;
+		double d_ts1 = ts1.tv_sec + ts1.tv_nsec / double(BILLION);
+		double t1_diff = d_ts1 - pt1;
+		if (t1_diff >= 2. && pt1 > 0)
+			n_interval_1++;
 		pt1 = d_ts1;
 
 		timespec ts2 { };
@@ -289,13 +314,19 @@ int main(int argc, char *argv[])
 			r2.valid = false;
 		}
 
-		uint64_t d_ts2 = ts2.tv_sec + ts2.tv_nsec / BILLION;
-		if (d_ts2 - pt2 >= 2 && pt2 > 0)
-			n_missing_2++;
+		double d_ts2 = ts2.tv_sec + ts2.tv_nsec / double(BILLION);
+		double t2_diff = d_ts2 - pt2;
+		if (t2_diff >= 2. && pt2 > 0)
+			n_interval_2++;
 		pt2 = d_ts2;
 
 		if (stop)
 			break;
+
+		if (first) {
+			first = false;
+			continue;
+		}
 
 		double difference = diff_timespec(&ts1, &ts2);
 		char  *gps_buffer = nullptr;
@@ -303,8 +334,8 @@ int main(int argc, char *argv[])
 		asprintf(&gps_buffer, " %d %f", fix.load(), hdop / double(MILLION));
 #endif
 		char  *buffer     = nullptr;
-		const char *fmt   = s_not ? "%u %ld.%09ld %ld.%09ld %e %u/%u %Le%s\n" : "%u %ld.%09ld %ld.%09ld %.09f %u/%u %.9Lf%s\n";
-		asprintf(&buffer, fmt, n + 1, ts1.tv_sec, ts1.tv_nsec, ts2.tv_sec, ts2.tv_nsec, difference, n_missing_1, n_missing_2, n >= 1 ? total_diff_diff / n: -1., gps_buffer ? gps_buffer : "");
+		const char *fmt   = s_not ? "%u %ld.%09ld %ld.%09ld %e %u/%u %u/%u %Le %e %e%s\n" : "%u %ld.%09ld %ld.%09ld %.09f %u/%u %u/%u %.9Lf %f %f%s\n";
+		asprintf(&buffer, fmt, n + 1, ts1.tv_sec, ts1.tv_nsec, ts2.tv_sec, ts2.tv_nsec, difference, n_interval_1, n_interval_2, n_missing_1, n_missing_2, n >= 1 ? total_diff_diff / n: -1., t1_diff, t2_diff, gps_buffer ? gps_buffer : "");
 		emit(fh, log_file, buffer);
 		free(buffer);
 #if HAVE_GPS
